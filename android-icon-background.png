@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# EduTracker Mobile - Installation Script
+# Run this after unzipping
+
+echo "🚀 Installing EduTracker Mobile..."
+echo ""
+
+# Step 1: Clean
+echo "📦 Cleaning old files..."
+rm -rf node_modules package-lock.json
+echo "✅ Clean complete"
+echo ""
+
+# Step 2: Install dependencies
+echo "📦 Installing dependencies..."
+npm install
+echo "✅ Dependencies installed"
+echo ""
+
+echo "🎉 Installation complete!"
+echo ""
+echo "▶️  To start the app, run:"
+echo "    npx expo start"
+echo ""
