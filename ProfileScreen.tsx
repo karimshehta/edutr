@@ -30,7 +30,7 @@ export function ProfObjections({ route }: any) {
   const [selected, setSelected] = useState<GradeObjection | null>(null);
   const [response, setResponse] = useState('');
   const [adjustedScore, setAdjustedScore] = useState('');
-  const [actionType, setActionType] = useState<'reject' | 'adjust'>('reject');
+  const [actionType, setActionType] = useState<'reject' | 'adjust' | 'approve'>('reject');
   const [submitting, setSubmitting] = useState(false);
 
   const loadObjections = useCallback(async () => {
@@ -72,7 +72,7 @@ export function ProfObjections({ route }: any) {
     setRefreshing(false);
   };
 
-  const openAction = (obj: GradeObjection & { studentName: string }, type: 'reject' | 'adjust') => {
+  const openAction = (obj: GradeObjection & { studentName: string }, type: 'reject' | 'adjust' | 'approve') => {
     setSelected(obj);
     setActionType(type);
     setResponse('');
@@ -84,7 +84,25 @@ export function ProfObjections({ route }: any) {
     if (!selected || !profile) return;
     setSubmitting(true);
 
-    if (actionType === 'reject') {
+    if (actionType === 'approve') {
+      await supabase
+        .from('grade_objections')
+        .update({
+          status: 'approved',
+          instructor_response: response.trim() || null,
+          reviewed_by: profile.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', selected.id);
+
+      await supabase.from('notifications').insert({
+        user_id: selected.student_id,
+        title: 'Grade Objection Approved',
+        message: `Your objection for "${selected.exam_name}" has been approved.`,
+        type: 'grade',
+        link: `/course/${selected.course_id}`,
+      });
+    } else if (actionType === 'reject') {
       await supabase
         .from('grade_objections')
         .update({
@@ -181,20 +199,29 @@ export function ProfObjections({ route }: any) {
               </View>
             )}
             {item.status === 'pending' && (
-              <View style={styles.actions}>
-                <Button
-                  title="Reject"
-                  variant="danger"
-                  size="sm"
-                  onPress={() => openAction(item, 'reject')}
-                  style={{ flex: 1, marginRight: spacing.sm }}
-                />
+              <View style={styles.actionsCol}>
+                <View style={styles.actions}>
+                  <Button
+                    title="Approve"
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => openAction(item, 'approve')}
+                    style={{ flex: 1, marginRight: spacing.sm }}
+                  />
+                  <Button
+                    title="Reject"
+                    variant="danger"
+                    size="sm"
+                    onPress={() => openAction(item, 'reject')}
+                    style={{ flex: 1 }}
+                  />
+                </View>
                 <Button
                   title="Adjust Score"
                   variant="primary"
                   size="sm"
                   onPress={() => openAction(item, 'adjust')}
-                  style={{ flex: 1 }}
+                  style={{ marginTop: spacing.sm }}
                 />
               </View>
             )}
@@ -206,7 +233,7 @@ export function ProfObjections({ route }: any) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
-              {actionType === 'reject' ? 'Reject Objection' : 'Adjust Score'}
+              {actionType === 'approve' ? 'Approve Objection' : actionType === 'reject' ? 'Reject Objection' : 'Adjust Score'}
             </Text>
 
             {actionType === 'adjust' && (
@@ -242,7 +269,7 @@ export function ProfObjections({ route }: any) {
                 title="Submit"
                 onPress={handleSubmit}
                 loading={submitting}
-                variant={actionType === 'reject' ? 'danger' : 'primary'}
+                variant={actionType === 'reject' ? 'danger' : actionType === 'approve' ? 'secondary' : 'primary'}
                 style={{ flex: 1 }}
               />
             </View>
@@ -267,6 +294,7 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   responseBox: { backgroundColor: colors.neutral[50], padding: spacing.sm, borderRadius: borderRadius.sm, marginBottom: spacing.sm },
   responseLabel: { ...typography.captionMedium, color: colors.neutral[600], marginBottom: 2 },
   responseText: { ...typography.caption, color: colors.neutral[500] },
+  actionsCol: { flexDirection: 'column' },
   actions: { flexDirection: 'row' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: colors.neutral[0], borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg },

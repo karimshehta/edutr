@@ -36,11 +36,12 @@ export function ProfessorSchedule() {
   const [weekDays, setWeekDays] = useState(getOrderedWeekDays());
   const [loading, setLoading] = useState(true);
 
-  // Action state — same as ManageSchedule
   const [cancellingLecture, setCancellingLecture] = useState<string | null>(null);
   const [deletingLecture, setDeletingLecture] = useState<string | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancellingItem, setCancellingItem] = useState<(Lecture & { courseName: string; courseCode: string }) | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
-  // Edit modal state — same as ManageSchedule
   const [showModal, setShowModal] = useState(false);
   const [editingLecture, setEditingLecture] = useState<Lecture | null>(null);
   const [title, setTitle] = useState('');
@@ -150,33 +151,62 @@ export function ProfessorSchedule() {
     loadData();
   };
 
-  // toggleCancelLecture — same logic, already existing, updated to pass courseId to notifyStudents
-  const toggleCancelLecture = async (lecture: Lecture & { courseName: string; courseCode: string }) => {
+  const openCancelModal = (lecture: Lecture & { courseName: string; courseCode: string }) => {
+    setCancellingItem(lecture);
+    setCancelReason('');
+    setShowCancelModal(true);
+  };
+
+  const confirmCancelLecture = async () => {
+    if (!cancellingItem || cancellingLecture) return;
+    setCancellingLecture(cancellingItem.id);
+    try {
+      const { error } = await supabase
+        .from('lectures')
+        .update({
+          is_cancelled: true,
+          cancelled_reason: cancelReason.trim() || null,
+          notification_sent_at: new Date().toISOString(),
+        })
+        .eq('id', cancellingItem.id);
+
+      if (error) throw error;
+
+      const msg = cancelReason.trim()
+        ? `Lecture "${cancellingItem.title}" has been cancelled. Reason: ${cancelReason.trim()}`
+        : `Lecture "${cancellingItem.title}" has been cancelled.`;
+      await notifyStudents(msg, cancellingItem.course_id);
+      showToast(`"${cancellingItem.title}" cancelled`, 'info', 3000);
+      setShowCancelModal(false);
+      setCancellingItem(null);
+      setCancelReason('');
+      await loadData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to cancel lecture', 'error', 4000);
+    } finally {
+      setCancellingLecture(null);
+    }
+  };
+
+  const reactivateLecture = async (lecture: Lecture & { courseName: string; courseCode: string }) => {
     if (cancellingLecture) return;
-    const action = lecture.is_cancelled ? 'reactivate' : 'cancel';
     setCancellingLecture(lecture.id);
     try {
       const { error } = await supabase
         .from('lectures')
         .update({
-          is_cancelled: !lecture.is_cancelled,
+          is_cancelled: false,
+          cancelled_reason: null,
           notification_sent_at: new Date().toISOString(),
         })
         .eq('id', lecture.id);
 
       if (error) throw error;
-      await notifyStudents(
-        `Lecture "${lecture.title}" has been ${action === 'cancel' ? 'cancelled' : 'reactivated'}.`,
-        lecture.course_id,
-      );
-      showToast(
-        action === 'cancel' ? `"${lecture.title}" cancelled` : `"${lecture.title}" reactivated`,
-        action === 'cancel' ? 'info' : 'success',
-        3000,
-      );
+      await notifyStudents(`Lecture "${lecture.title}" has been reactivated.`, lecture.course_id);
+      showToast(`"${lecture.title}" reactivated`, 'success', 3000);
       await loadData();
     } catch (err: any) {
-      showToast(err.message || `Failed to ${action} lecture`, 'error', 4000);
+      showToast(err.message || 'Failed to reactivate lecture', 'error', 4000);
     } finally {
       setCancellingLecture(null);
     }
@@ -266,9 +296,14 @@ export function ProfessorSchedule() {
                     {l.location && <Text style={styles.location}>{l.location}</Text>}
                   </View>
                   {l.is_cancelled && (
-                    <View style={styles.cancelledBadgeRow}>
-                      <Ionicons name="close-circle" size={13} color={colors.error[500]} />
-                      <Text style={styles.cancelledBadgeText}>Cancelled</Text>
+                    <View>
+                      <View style={styles.cancelledBadgeRow}>
+                        <Ionicons name="close-circle" size={13} color={colors.error[500]} />
+                        <Text style={styles.cancelledBadgeText}>Cancelled</Text>
+                      </View>
+                      {(l as any).cancelled_reason ? (
+                        <Text style={styles.cancelledReason} numberOfLines={2}>{(l as any).cancelled_reason}</Text>
+                      ) : null}
                     </View>
                   )}
                 </View>
@@ -280,7 +315,7 @@ export function ProfessorSchedule() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionBtn, styles.actionBtnCancel, l.is_cancelled && styles.actionBtnReactivate]}
-                    onPress={() => toggleCancelLecture(l)}
+                    onPress={() => l.is_cancelled ? reactivateLecture(l) : openCancelModal(l)}
                     disabled={cancellingLecture === l.id}
                   >
                     <Ionicons
@@ -357,6 +392,46 @@ export function ProfessorSchedule() {
             <View style={styles.modalActions}>
               <Button title="Cancel" variant="outline" size="sm" onPress={() => { setShowModal(false); resetForm(); }} style={{ flex: 1, marginRight: spacing.sm }} />
               <Button title="Save" size="sm" onPress={saveLecture} loading={saving} disabled={!title.trim()} style={{ flex: 1 }} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Cancel Lecture Modal */}
+      <Modal visible={showCancelModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { paddingBottom: spacing.lg + insets.bottom }]}>
+            <Text style={styles.modalTitle}>Cancel Lecture</Text>
+            {cancellingItem && (
+              <Text style={styles.cancelModalSub}>
+                {cancellingItem.title} — {cancellingItem.courseName}
+              </Text>
+            )}
+            <Text style={styles.fieldLabel}>Reason (optional)</Text>
+            <Input
+              placeholder="e.g. Professor is sick, holiday, etc."
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              multiline
+              numberOfLines={3}
+              style={{ minHeight: 80, textAlignVertical: 'top' }}
+            />
+            <View style={styles.modalActions}>
+              <Button
+                title="Back"
+                variant="outline"
+                size="sm"
+                onPress={() => { setShowCancelModal(false); setCancellingItem(null); setCancelReason(''); }}
+                style={{ flex: 1, marginRight: spacing.sm }}
+              />
+              <Button
+                title="Confirm Cancel"
+                variant="danger"
+                size="sm"
+                onPress={confirmCancelLecture}
+                loading={cancellingLecture === cancellingItem?.id}
+                style={{ flex: 1 }}
+              />
             </View>
           </View>
         </View>
@@ -461,4 +536,6 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   typeBtnText: { ...typography.captionMedium, color: colors.neutral[600] },
   typeBtnTextActive: { color: '#fff' },
   modalActions: { flexDirection: 'row', marginTop: spacing.sm },
+  cancelModalSub: { ...typography.body, color: colors.neutral[600], marginBottom: spacing.md },
+  cancelledReason: { ...typography.tiny, color: colors.error[500], marginTop: 2, fontStyle: 'italic' },
 });

@@ -48,6 +48,10 @@ export function ProfAttendance({ route }: any) {
   const [course, setCourse] = useState<{ is_attendance_published: boolean; total_lectures_held: number } | null>(null);
   const [editingLectures, setEditingLectures] = useState(false);
   const [lecturesValue, setLecturesValue] = useState('0');
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [enrolledStudents, setEnrolledStudents] = useState<{ id: string; first_name: string | null; last_name: string | null; email: string }[]>([]);
+  const [manualStatus, setManualStatus] = useState<'present' | 'late'>('present');
+  const [markingManual, setMarkingManual] = useState(false);
 
   // Calculate lecture date matching web logic
   const calculateLectureDate = (dayOfWeek: number): string => {
@@ -267,6 +271,43 @@ export function ProfAttendance({ route }: any) {
     }
   };
 
+  const openManualMarkModal = async () => {
+    const { data: enrollments } = await supabase
+      .from('enrollments').select('student_id').eq('course_id', courseId).eq('is_blocked', false);
+    const ids = (enrollments || []).map((e) => e.student_id);
+    if (ids.length === 0) { showToast('No enrolled students', 'info'); return; }
+    const { data: profiles } = await supabase
+      .from('user_profiles').select('id, first_name, last_name, email').in('id', ids);
+    const alreadyMarked = new Set(liveRecords.map((r) => r.student_id));
+    setEnrolledStudents((profiles || []).filter((p) => !alreadyMarked.has(p.id)));
+    setManualStatus('present');
+    setShowManualModal(true);
+  };
+
+  const markStudentManually = async (studentId: string) => {
+    if (!activeSession || markingManual) return;
+    setMarkingManual(true);
+    try {
+      await supabase.from('attendance_records').insert({
+        session_id: activeSession.id,
+        student_id: studentId,
+        marked_at: new Date().toISOString(),
+        distance_meters: 0,
+        student_latitude: 0,
+        student_longitude: 0,
+        status: manualStatus,
+        marked_manually: true,
+      });
+      showToast('Student marked manually');
+      setEnrolledStudents((prev) => prev.filter((s) => s.id !== studentId));
+      await loadLiveRecords(activeSession.id);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to mark student', 'error');
+    } finally {
+      setMarkingManual(false);
+    }
+  };
+
   const togglePublish = async () => {
     if (!course) return;
     await supabase.from('courses').update({ is_attendance_published: !course.is_attendance_published }).eq('id', courseId);
@@ -432,15 +473,25 @@ export function ProfAttendance({ route }: any) {
               </View>
             ))}
 
-            <Button 
-              title={closing ? "Closing..." : "Close Session"} 
-              variant="danger" 
-              size="sm" 
-              onPress={closeSession} 
-              style={{ marginTop: spacing.sm }}
-              loading={closing}
-              disabled={closing}
-            />
+            <View style={s.sessionActions}>
+              <Button
+                title="Mark Student"
+                variant="secondary"
+                size="sm"
+                onPress={openManualMarkModal}
+                style={{ flex: 1, marginRight: spacing.sm }}
+                icon="person-add-outline"
+              />
+              <Button
+                title={closing ? "Closing..." : "Close Session"}
+                variant="danger"
+                size="sm"
+                onPress={closeSession}
+                style={{ flex: 1 }}
+                loading={closing}
+                disabled={closing}
+              />
+            </View>
           </Card>
         ) : (
           <Button
@@ -622,6 +673,59 @@ export function ProfAttendance({ route }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Manual Mark Student Modal */}
+      <Modal visible={showManualModal} animationType="slide" transparent>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalContent, { paddingBottom: spacing.lg + insets.bottom }]}>
+            <Text style={s.modalTitle}>Mark Student Manually</Text>
+            <Text style={s.modalSub}>Select a student and mark their attendance status</Text>
+
+            <View style={s.statusToggleRow}>
+              {(['present', 'late'] as const).map((st) => (
+                <TouchableOpacity
+                  key={st}
+                  style={[s.statusToggleBtn, manualStatus === st && s.statusToggleBtnActive]}
+                  onPress={() => setManualStatus(st)}
+                >
+                  <Text style={[s.statusToggleText, manualStatus === st && s.statusToggleTextActive]}>
+                    {st.charAt(0).toUpperCase() + st.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <ScrollView style={s.lectureList}>
+              {enrolledStudents.length === 0 ? (
+                <Text style={s.noLectures}>All students have been marked.</Text>
+              ) : (
+                enrolledStudents.map((student) => (
+                  <TouchableOpacity
+                    key={student.id}
+                    style={s.lectureOption}
+                    onPress={() => markStudentManually(student.id)}
+                    disabled={markingManual}
+                  >
+                    <View>
+                      <Text style={s.lectOptTitle}>{`${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Unknown'}</Text>
+                      <Text style={s.lectOptSub}>{student.email}</Text>
+                    </View>
+                    <Ionicons name="add-circle-outline" size={20} color={colors.success[500]} />
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+
+            <Button
+              title="Close"
+              variant="outline"
+              size="sm"
+              onPress={() => setShowManualModal(false)}
+              style={{ marginTop: spacing.md }}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -702,7 +806,20 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   },
   radiusHint: { ...typography.small, color: colors.neutral[400], fontStyle: 'italic' },
   stepButtons: { flexDirection: 'row', gap: spacing.sm },
-  
+  sessionActions: { flexDirection: 'row', marginTop: spacing.sm },
+
+  statusToggleRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  statusToggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.neutral[100],
+  },
+  statusToggleBtnActive: { backgroundColor: colors.success[500] },
+  statusToggleText: { ...typography.captionMedium, color: colors.neutral[600] },
+  statusToggleTextActive: { color: '#fff' },
+
   lectureList: { maxHeight: 280 },
   lectureOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.neutral[100] },
   lectOptTitle: { ...typography.bodyMedium, color: colors.neutral[800] },

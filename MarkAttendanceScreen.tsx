@@ -40,6 +40,9 @@ export function ManageSchedule({ route }: any) {
   const [saving, setSaving] = useState(false);
   const [cancellingLecture, setCancellingLecture] = useState<string | null>(null);
   const [deletingLecture, setDeletingLecture] = useState<string | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancellingItem, setCancellingItem] = useState<Lecture | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const loadLectures = useCallback(async () => {
     const { data } = await supabase.from('lectures').select('*')
@@ -119,29 +122,63 @@ export function ManageSchedule({ route }: any) {
     loadLectures();
   };
 
-  // Toggle cancel/reactivate lecture
-  const toggleCancelLecture = async (lecture: Lecture) => {
-    if (cancellingLecture) return; // Prevent multiple clicks
-    
-    const action = lecture.is_cancelled ? 'reactivate' : 'cancel';
-    setCancellingLecture(lecture.id);
-    
+  const openCancelModal = (lecture: Lecture) => {
+    setCancellingItem(lecture);
+    setCancelReason('');
+    setShowCancelModal(true);
+  };
+
+  const confirmCancelLecture = async () => {
+    if (!cancellingItem || cancellingLecture) return;
+    setCancellingLecture(cancellingItem.id);
     try {
       const { error } = await supabase
         .from('lectures')
-        .update({ 
-          is_cancelled: !lecture.is_cancelled,
+        .update({
+          is_cancelled: true,
+          cancelled_reason: cancelReason.trim() || null,
+          notification_sent_at: new Date().toISOString(),
+        })
+        .eq('id', cancellingItem.id);
+
+      if (error) throw error;
+
+      const msg = cancelReason.trim()
+        ? `Lecture "${cancellingItem.title}" has been cancelled. Reason: ${cancelReason.trim()}`
+        : `Lecture "${cancellingItem.title}" has been cancelled.`;
+      await notifyStudents(msg);
+      showToast('Lecture cancelled');
+      setShowCancelModal(false);
+      setCancellingItem(null);
+      setCancelReason('');
+      await loadLectures();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to cancel lecture', 'error');
+    } finally {
+      setCancellingLecture(null);
+    }
+  };
+
+  const reactivateLecture = async (lecture: Lecture) => {
+    if (cancellingLecture) return;
+    setCancellingLecture(lecture.id);
+    try {
+      const { error } = await supabase
+        .from('lectures')
+        .update({
+          is_cancelled: false,
+          cancelled_reason: null,
           notification_sent_at: new Date().toISOString(),
         })
         .eq('id', lecture.id);
 
       if (error) throw error;
-      
-      await notifyStudents(`Lecture "${lecture.title}" has been ${action === 'cancel' ? 'cancelled' : 'reactivated'}.`);
-      showToast(`Lecture ${action === 'cancel' ? 'cancelled' : 'reactivated'}`);
+
+      await notifyStudents(`Lecture "${lecture.title}" has been reactivated.`);
+      showToast('Lecture reactivated');
       await loadLectures();
     } catch (err: any) {
-      showToast(err.message || `Failed to ${action} lecture`, 'error');
+      showToast(err.message || 'Failed to reactivate lecture', 'error');
     } finally {
       setCancellingLecture(null);
     }
@@ -205,9 +242,14 @@ export function ManageSchedule({ route }: any) {
                         {l.location && <Text style={styles.locationText}>{l.location}</Text>}
                       </View>
                       {l.is_cancelled && (
-                        <View style={styles.cancelledBadgeRow}>
-                          <Ionicons name="close-circle-outline" size={14} color={colors.error[600]} />
-                          <Text style={styles.cancelledBadgeText}>Cancelled</Text>
+                        <View>
+                          <View style={styles.cancelledBadgeRow}>
+                            <Ionicons name="close-circle-outline" size={14} color={colors.error[600]} />
+                            <Text style={styles.cancelledBadgeText}>Cancelled</Text>
+                          </View>
+                          {(l as any).cancelled_reason ? (
+                            <Text style={styles.cancelledReason} numberOfLines={2}>{(l as any).cancelled_reason}</Text>
+                          ) : null}
                         </View>
                       )}
                     </View>
@@ -219,7 +261,7 @@ export function ManageSchedule({ route }: any) {
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.actionBtn, styles.actionBtnCancel, l.is_cancelled && styles.actionBtnReactivate]}
-                        onPress={() => toggleCancelLecture(l)}
+                        onPress={() => l.is_cancelled ? reactivateLecture(l) : openCancelModal(l)}
                         disabled={cancellingLecture === l.id}
                       >
                         <Ionicons
@@ -296,6 +338,46 @@ export function ManageSchedule({ route }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Cancel Lecture Modal */}
+      <Modal visible={showCancelModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { paddingBottom: spacing.lg + insets.bottom }]}>
+            <Text style={styles.modalTitle}>Cancel Lecture</Text>
+            {cancellingItem && (
+              <Text style={styles.cancelModalSub}>
+                {cancellingItem.title} — {getDayName(cancellingItem.day_of_week)}
+              </Text>
+            )}
+            <Text style={styles.fieldLabel}>Reason (optional)</Text>
+            <Input
+              placeholder="e.g. Professor is sick, holiday, etc."
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              multiline
+              numberOfLines={3}
+              style={{ minHeight: 80, textAlignVertical: 'top' }}
+            />
+            <View style={styles.modalActions}>
+              <Button
+                title="Back"
+                variant="outline"
+                size="sm"
+                onPress={() => { setShowCancelModal(false); setCancellingItem(null); setCancelReason(''); }}
+                style={{ flex: 1, marginRight: spacing.sm }}
+              />
+              <Button
+                title="Confirm Cancel"
+                variant="danger"
+                size="sm"
+                onPress={confirmCancelLecture}
+                loading={cancellingLecture === cancellingItem?.id}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -350,6 +432,17 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     ...typography.small,
     color: colors.error[600],
     fontWeight: '600',
+  },
+  cancelledReason: {
+    ...typography.tiny,
+    color: colors.error[500],
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  cancelModalSub: {
+    ...typography.body,
+    color: colors.neutral[600],
+    marginBottom: spacing.md,
   },
   // Horizontal action row (edit / cancel / delete icons)
   actionRow: { flexDirection: 'row', gap: 2, marginLeft: spacing.sm },
