@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { UserProfile } from '../types';
+import { unregisterExpoPushToken } from '../lib/pushNotifications';
 
 interface AuthState {
   session: Session | null;
@@ -122,9 +123,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (user?.id) {
+      await unregisterExpoPushToken(user.id);
+    }
     await supabase.auth.signOut();
     setProfile(null);
-  }, []);
+  }, [user]);
 
   const resetPassword = useCallback(async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {

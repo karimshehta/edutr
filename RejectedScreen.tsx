@@ -95,10 +95,11 @@ export function NotificationsScreen({ navigation }: any) {
   };
 
   const handleViewDetails = (item: NotificationWithCourse) => {
-    // Grade notifications → navigate to Grades tab
     if (item.type === 'grade') {
       if (profile?.role === 'student') {
         navigation.navigate('Grades');
+      } else if (profile?.role === 'professor') {
+        navigation.navigate('Courses');
       }
       return;
     }

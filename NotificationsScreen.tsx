@@ -371,6 +371,8 @@ export function ProfAttendance({ route }: any) {
           'Student Name': `${p.first_name || ''} ${p.last_name || ''}`.trim(),
           'Email': p.email,
           'Status': status.charAt(0).toUpperCase() + status.slice(1),
+          'Marked Manually': rec?.marked_manually ? 'Yes' : 'No',
+          'Distance (m)': rec?.marked_manually ? '-' : (rec ? Math.round(rec.distance_meters) : '-'),
         };
       });
 
@@ -453,22 +455,30 @@ export function ProfAttendance({ route }: any) {
             {liveRecords.filter(r => r.status !== 'absent').map((r) => (
               <View key={r.id} style={s.recordRow}>
                 <View style={s.recordLeft}>
-                  <Ionicons 
-                    name="checkmark-circle" 
-                    size={18} 
-                    color={r.status === 'present' ? colors.success[500] : colors.warning[500]} 
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={18}
+                    color={r.status === 'present' ? colors.success[500] : colors.warning[500]}
                   />
                   <View style={s.recordInfo}>
                     <Text style={s.recordName}>{r.studentName}</Text>
                     <Text style={s.recordEmail}>{r.studentEmail}</Text>
+                    {(r as any).marked_manually && (
+                      <View style={s.manualBadge}>
+                        <Ionicons name="hand-left-outline" size={10} color={colors.accent[600]} />
+                        <Text style={[s.manualBadgeText, { color: colors.accent[600] }]}>Manual</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
                 <View style={s.recordRight}>
-                  <Badge 
-                    text={r.status.charAt(0).toUpperCase() + r.status.slice(1)} 
-                    variant={r.status === 'present' ? 'success' : 'warning'} 
+                  <Badge
+                    text={r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                    variant={r.status === 'present' ? 'success' : 'warning'}
                   />
-                  <Text style={s.recordDist}>{Math.round(r.distance_meters)}m</Text>
+                  {!(r as any).marked_manually && (
+                    <Text style={s.recordDist}>{Math.round(r.distance_meters)}m</Text>
+                  )}
                 </View>
               </View>
             ))}
@@ -825,4 +835,6 @@ const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   lectOptTitle: { ...typography.bodyMedium, color: colors.neutral[800] },
   lectOptSub: { ...typography.caption, color: colors.neutral[400], marginTop: 2 },
   noLectures: { ...typography.body, color: colors.neutral[400], textAlign: 'center', paddingVertical: spacing.lg },
+  manualBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  manualBadgeText: { fontSize: 10, fontWeight: '600' },
 });

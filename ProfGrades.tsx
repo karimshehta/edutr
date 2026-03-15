@@ -22,11 +22,11 @@ interface StudentItem extends UserProfile {
   enrollment: Enrollment;
 }
 
-export function ProfStudents({ route }: any) {
+export function ProfStudents({ route, navigation }: any) {
 
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
-  const { courseId } = route.params;
+  const { courseId, courseName } = route.params;
   const { profile } = useAuth();
   const { showToast } = useToast();
   const [students, setStudents] = useState<StudentItem[]>([]);
@@ -191,6 +191,16 @@ export function ProfStudents({ route }: any) {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity
+        style={[styles.gradesShortcut, { backgroundColor: isDark ? colors.primary[900] : colors.primary[50], borderColor: isDark ? colors.primary[700] : colors.primary[200] }]}
+        onPress={() => navigation.navigate('ProfGrades', { courseId, courseName })}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="bar-chart-outline" size={16} color={colors.primary[600]} />
+        <Text style={[styles.gradesShortcutText, { color: colors.primary[600] }]}>View Exam Analytics & Grades</Text>
+        <Ionicons name="chevron-forward" size={14} color={colors.primary[500]} />
+      </TouchableOpacity>
+
       <View style={styles.filtersContainer}>
         <View style={styles.searchContainer}>
           <Ionicons name="search-outline" size={18} color={colors.neutral[400]} />
@@ -202,7 +212,7 @@ export function ProfStudents({ route }: any) {
             placeholderTextColor={colors.neutral[400]}
           />
         </View>
-        
+
         {/* Filter Toggle Buttons */}
         <View style={styles.filterToggle}>
           <TouchableOpacity
@@ -325,6 +335,19 @@ export function ProfStudents({ route }: any) {
 
 const makeStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.neutral[50] },
+  gradesShortcut: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  gradesShortcutText: { ...typography.captionMedium, fontWeight: '600', flex: 1 },
   filtersContainer: {
     flexDirection: 'row',
     margin: spacing.md,

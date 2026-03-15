@@ -106,11 +106,11 @@ export function ProfessorDashboard({ navigation }: any) {
           <>
             <View style={styles.statsRow}>
               {[
-                { icon: 'book-outline', color: colors.primary[500], val: courses.filter((c) => c.is_active).length, label: 'Courses' },
-                { icon: 'people-outline', color: colors.secondary[500], val: totalStudents, label: 'Students' },
-                { icon: 'flag-outline', color: colors.accent[500], val: pendingObjections, label: 'Objections' },
+                { icon: 'book-outline', color: colors.primary[500], val: courses.filter((c) => c.is_active).length, label: 'Courses', onPress: () => navigation.getParent()?.navigate('Courses') },
+                { icon: 'people-outline', color: colors.secondary[500], val: totalStudents, label: 'Students', onPress: undefined },
+                { icon: 'flag-outline', color: colors.accent[500], val: pendingObjections, label: 'Objections', onPress: () => navigation.getParent()?.navigate('Courses') },
               ].map((s) => (
-                <Card key={s.label} style={styles.statCard}>
+                <Card key={s.label} style={styles.statCard} onPress={s.onPress}>
                   <Ionicons name={s.icon as any} size={22} color={s.color} />
                   <Text style={styles.statNumber}>{s.val}</Text>
                   <Text style={styles.statLabel}>{s.label}</Text>
