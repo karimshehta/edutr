@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "EduTracker",
+    "slug": "edutracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "edutracker",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.omrex.edutracker",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "EduTracker needs your location to mark attendance for your classes.",
+        "NSLocationAlwaysUsageDescription": "EduTracker needs your location to mark attendance for your classes."
+      },
+      "associatedDomains": ["applinks:omrex.vercel.app"]
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A1628",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.omrex.edutracker",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "edutracker",
+              "host": "*"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "EduTracker needs your location to mark attendance."
+        }
+      ]
+    ]
+  }
+}

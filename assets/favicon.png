@@ -1,0 +1,20 @@
+@echo off
+echo 🧹 Cleaning Expo ^& Metro cache...
+
+REM Clear Metro bundler cache
+echo Clearing Metro cache...
+rmdir /s /q %TEMP%\metro-* 2>nul
+rmdir /s /q %TEMP%\react-* 2>nul
+rmdir /s /q %TEMP%\haste-* 2>nul
+
+REM Clear Expo cache
+echo Clearing Expo cache...
+rmdir /s /q .expo 2>nul
+rmdir /s /q node_modules\.cache 2>nul
+
+echo ✅ Cache cleared!
+echo.
+echo Now run:
+echo   npx expo start -c
+echo.
+pause

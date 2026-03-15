@@ -1,0 +1,30 @@
+@echo off
+REM EduTracker Mobile - Installation Script (Windows)
+REM Run this after unzipping
+
+echo ================================================
+echo   EduTracker Mobile - Installation
+echo ================================================
+echo.
+
+REM Step 1: Clean
+echo [1/2] Cleaning old files...
+if exist node_modules rmdir /s /q node_modules
+if exist package-lock.json del /f /q package-lock.json
+echo Done!
+echo.
+
+REM Step 2: Install dependencies
+echo [2/2] Installing dependencies...
+call npm install
+echo Done!
+echo.
+
+echo ================================================
+echo   Installation Complete!
+echo ================================================
+echo.
+echo To start the app, run:
+echo     npx expo start
+echo.
+pause
